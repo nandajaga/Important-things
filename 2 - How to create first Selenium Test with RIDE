@@ -36,7 +36,7 @@ Step 6 : Now in the TC if you start typing Selenium and ctrl+space it
 
 Step 7 : Add keywords and run
 
-Step 8 : Add browser drivers
+Step 8 : Add browser drivers // download rerquired Webdriver for chrome or FF and put in a global location i.e keep in a folder where the path is setted
 
 Step 9 : Run and see reports
 

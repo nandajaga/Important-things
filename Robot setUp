@@ -43,7 +43,7 @@ Step 5 : Check on cmd :
 Step 6 : Download and install wxPython  
             https://sourceforge.net/projects/wxpython   files-->choose the version as per the python 32 or 64 bit, type python in cmd to see version
             
- check with  : pip freeze  
+ check with  : pip freeze  -->given robotframework version
  wxpython should be available
 
 Step 7 : Install RIDE

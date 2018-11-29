@@ -1,6 +1,6 @@
 References:
 Python - https://www.python.org/downloads/
-wxPython - https://sourceforge.net/projects/wxpy...
+wxPython - https://sourceforge.net/projects/wxpython/files
 
 note: RIDE might not work with python 3
 
@@ -41,7 +41,8 @@ Step 5 : Check on cmd :
   pybot --version
 
 Step 6 : Download and install wxPython  
-            https://sourceforge.net/projects/wxpy...
+            https://sourceforge.net/projects/wxpython   files-->choose the version as per the python 32 or 64 bit, type python in cmd to see version
+            
  check with  : pip freeze  
  wxpython should be available
 

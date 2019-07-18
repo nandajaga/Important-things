@@ -1,0 +1,297 @@
+import com.ctl.esec.crypto.BasicEncryptor;
+import com.ctl.esec.crypto.CipherText;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.rallydev.rest.RallyRestApi;
+import com.rallydev.rest.request.CreateRequest;
+import com.rallydev.rest.request.QueryRequest;
+import com.rallydev.rest.response.CreateResponse;
+import com.rallydev.rest.response.QueryResponse;
+import com.rallydev.rest.util.Fetch;
+import com.rallydev.rest.util.QueryFilter;
+import cucumber.api.Result.Type;
+import cucumber.api.Scenario;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.net.URI;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class RallyTools
+{
+  private static RallyRestApi restApi;
+  private static boolean flagToUploadResultInCaac = false;
+  private static String username = "";
+  private static String testSetRef = null;
+  private static String tsID = System.getProperty("staf.rally.testset.key");
+  private static String buildValue = null;
+  private static String userRef = null;
+  
+  public static void initiateRallyLogin()
+  {
+    QueryResponse userQueryResponse = null;
+    String pwd = "";
+    if (System.getProperty("staf.rallyupdate.key") == null)
+    {
+      flagToUploadResultInCaac = false;
+      System.out.println("*******************************************************************************************");
+      System.out.println("Result for test cases will NOT be updated in CaaC as execution is not happening from Jenkins");
+      System.out.println("*******************************************************************************************");
+      return;
+    }
+    if (!System.getProperty("staf.rallyupdate.key").trim().equalsIgnoreCase("YES"))
+    {
+      flagToUploadResultInCaac = false;
+      System.out.println("*********************************************************************************");
+      System.out.println("Result for test cases will NOT be updated as CaaC update flag is not set to 'YES'");
+      System.out.println("**********************************************************************************");
+      return;
+    }
+    if ((System.getProperty("staf.rally.username.key") == null) || (System.getProperty("staf.rally.password.key") == null))
+    {
+      flagToUploadResultInCaac = false;
+      System.out.println("**************************************************************************************");
+      System.out.println("Result for test cases will NOT be updated in CaaC as user credentials are not provided");
+      System.out.println("**************************************************************************************");
+      return;
+    }
+    if ((System.getProperty("staf.rally.username.key") != null) || (System.getProperty("staf.rally.password.key") != null))
+    {
+      username = System.getProperty("staf.rally.username.key").toLowerCase();
+      pwd = System.getProperty("staf.rally.password.key");
+    }
+    try
+    {
+      if (restApi == null)
+      {
+        restApi = new RallyRestApi(new URI("https://rally1.rallydev.com"), username, decryptPassword(pwd));
+        if (flagToUploadResultInCaac == true)
+        {
+          QueryRequest userRequest = new QueryRequest("User");
+          userRequest.setFetch(new Fetch(new String[] { "UserName", "Subscription", "DisplayName" }));
+          
+          userRequest.setQueryFilter(new QueryFilter("UserName", "=", username));
+          
+          userQueryResponse = restApi.query(userRequest);
+          
+          JsonObject userQueryObject = userQueryResponse.getResults().get(0).getAsJsonObject();
+          userRef = userQueryObject.get("_ref").getAsString();
+        }
+        else
+        {
+          return;
+        }
+      }
+    }
+    catch (Exception e)
+    {
+      flagToUploadResultInCaac = false;
+      System.out.println("********************************************************************************************************");
+      System.out.println("Result for test cases will NOT be updated in CaaC as '" + username + "' or 'Password' provided is not correct");
+      System.out.println("********************************************************************************************************");
+      return;
+    }
+    testSetRef = testSetObject();
+  }
+  
+  private static void createTCResult(String tcID, String status)
+  {
+    QueryResponse testCaseQueryResponse = null;
+    CreateResponse createResponse = null;
+    JsonObject testCaseJsonObject = null;
+    QueryRequest userRequest = new QueryRequest("User");
+    userRequest.setFetch(new Fetch(new String[] { "UserName", "Subscription", "DisplayName" }));
+    
+    userRequest.setQueryFilter(new QueryFilter("UserName", "=", username));
+    
+    QueryRequest testCaseRequest = new QueryRequest("TestCase");
+    testCaseRequest.setFetch(new Fetch(new String[] { "FormattedID", "Name", "Workspace" }));
+    
+    testCaseRequest
+      .setQueryFilter(new QueryFilter("FormattedID", "=", tcID));
+    try
+    {
+      testCaseQueryResponse = restApi.query(testCaseRequest);
+      
+      testCaseJsonObject = testCaseQueryResponse.getResults().get(0).getAsJsonObject();
+    }
+    catch (Exception e)
+    {
+      System.out.println("**********************************************************************************************");
+      System.out.println("'" + tcID + "' is not a valid test case ID. Please update the Scenario with a valid test case ID");
+      System.out.println("**********************************************************************************************");
+      return;
+    }
+    String testCaseRef = testCaseJsonObject.get("_ref").getAsString();
+    
+    JsonObject newTestCaseResult = new JsonObject();
+    newTestCaseResult.addProperty("Workspace", testCaseJsonObject.get("Workspace").getAsJsonObject().get("_ref").getAsString());
+    newTestCaseResult.addProperty("Verdict", status);
+    TimeZone tz = TimeZone.getTimeZone("UTC");
+    DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
+    df.setTimeZone(tz);
+    newTestCaseResult.addProperty("Date", df.format(new Date()));
+    newTestCaseResult.addProperty("Notes", "Automated Selenium Test Runs");
+    if ((System.getProperty("staf.rally.build.key") == null) || (System.getProperty("staf.rally.build.key").equalsIgnoreCase("NA")))
+    {
+      df = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+      buildValue = df.format(new Date());
+    }
+    else
+    {
+      buildValue = System.getProperty("staf.rally.build.key");
+    }
+    newTestCaseResult.addProperty("Build", buildValue);
+    newTestCaseResult.addProperty("Tester", userRef);
+    newTestCaseResult.addProperty("TestCase", testCaseRef);
+    if (testSetRef != null) {
+      newTestCaseResult.addProperty("TestSet", testSetRef);
+    }
+    CreateRequest createRequest = new CreateRequest("testcaseresult", newTestCaseResult);
+    try
+    {
+      createResponse = restApi.create(createRequest);
+    }
+    catch (IOException e)
+    {
+      e.printStackTrace();
+    }
+    if (!createResponse.wasSuccessful())
+    {
+      String[] createErrors = createResponse.getErrors();
+      System.out.println("Error occurred creating Test Case: ");
+      for (int i = 0; i < createErrors.length; i++) {
+        if (createErrors[i].contains("Not authorized to update: TestCase"))
+        {
+          System.out.println("**********************************************************************************************************");
+          System.out.println("Test case '" + tcID + "' is not part of Test set '" + tsID + "'. Hence, the result of test case will not be updated");
+          System.out.println("**********************************************************************************************************");
+        }
+        else
+        {
+          System.out.println(createErrors[i]);
+        }
+      }
+    }
+    else
+    {
+      System.out.println("*********************************************");
+      System.out.println("Result for Test case ID '" + tcID + "' is updated");
+      System.out.println("*********************************************");
+    }
+  }
+  
+  private static void closeRestAPI()
+  {
+    try
+    {
+      restApi.close();
+    }
+    catch (IOException e)
+    {
+      e.printStackTrace();
+    }
+  }
+  
+  private static String testSetObject()
+  {
+    QueryResponse testSetQueryResponse = null;
+    JsonObject testSetJsonObject = null;
+    if ((tsID != null) && (!tsID.equalsIgnoreCase("NA")))
+    {
+      QueryRequest testSetRequest = new QueryRequest("TestSet");
+      testSetRequest.setFetch(new Fetch(new String[] { "FormattedID", "Name" }));
+      testSetRequest
+        .setQueryFilter(new QueryFilter("FormattedID", "=", tsID));
+      try
+      {
+        testSetQueryResponse = restApi.query(testSetRequest);
+        
+        testSetJsonObject = testSetQueryResponse.getResults().get(0).getAsJsonObject();
+        testSetRef = testSetJsonObject.get("_ref").getAsString();
+        System.out.println("**************************************************************************");
+        System.out.println("Result for test cases which are part of test set '" + tsID + "' will be updated");
+        System.out.println("**************************************************************************");
+        flagToUploadResultInCaac = true;
+      }
+      catch (Exception e)
+      {
+        System.out.println("***********************************************************************************");
+        System.out.println("'" + tsID + "'is not a valid test set ID. Hence, result of no test cases will be updated");
+        System.out.println("***********************************************************************************");
+        flagToUploadResultInCaac = false;
+        return null;
+      }
+    }
+    else
+    {
+      flagToUploadResultInCaac = true;
+      System.out.println("************************************************************************************************");
+      System.out.println("As Test set ID is not provided, ONLY result for test cases will be updated without TestSet update");
+      System.out.println("************************************************************************************************");
+    }
+    return testSetRef;
+  }
+  
+  public static void captureResultforCaaC(Scenario scenario)
+  {
+    if (flagToUploadResultInCaac == true)
+    {
+      Pattern p = Pattern.compile("TC[0-9]+");
+      Matcher m = p.matcher(scenario.getName());
+      if (!m.find())
+      {
+        System.out.println("No test case ID found in the scenario Name");
+        return;
+      }
+      String status = scenario.getStatus().toString();
+      if (status.equalsIgnoreCase("failed")) {
+        status = "Fail";
+      } else if (status.equalsIgnoreCase("passed")) {
+        status = "Pass";
+      }
+      createTCResult(m.group(), status);
+    }
+    HtmlReport.GenerateHtmlReport(scenario);
+  }
+  
+  private static String decryptPassword(String encData)
+  {
+    BasicEncryptor decryptor = null;
+    
+    String secretKey = "my$3cr3tD0ntT3EL";
+    CipherText cTxt = null;
+    String clearTxt = "";
+    try
+    {
+      cTxt = new CipherText(encData);
+      decryptor = new BasicEncryptor(cTxt);
+      clearTxt = decryptor.decrypt(cTxt, secretKey.toCharArray(), secretKey
+        .length() * 8);
+    }
+    catch (Exception e)
+    {
+      flagToUploadResultInCaac = false;
+      System.out.println("************************************************************************************************");
+      System.out.println("Result for test cases will NOT be updated in CaaC as 'Encrypted Password' provided is not correct");
+      System.out.println("************************************************************************************************");
+      return null;
+    }
+    flagToUploadResultInCaac = true;
+    
+    return clearTxt;
+  }
+  
+  public static void closeRallyAPI()
+  {
+    if (flagToUploadResultInCaac == true) {
+      closeRestAPI();
+    }
+    HtmlReport.EndHtmlReport();
+  }
+}

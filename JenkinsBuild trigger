@@ -1,0 +1,8 @@
+Curl command to setup trigger Jenkins Build:--
+
+curl --insecure https://cuid:Gitlab-Api@ne1itcprhas70.ne1.savvis.net:8443/view/ALL/job/  OurApplicationBuildNameInJenkins/buildWithParameters?token=TOKEN(any Alphanumeric value)
+
+Put the command in txt file and save with .sh extension
+
+Example:--
+curl --insecure https://sxkum64:780e3eb69bda9d514bf13d2d093e8a29@ne1itcprhas70.ne1.savvis.net:8443/view/ALL/job/ENTRPRS_TST_EON-GC-SANITY/buildWithParameters?token=EONGC0205281309

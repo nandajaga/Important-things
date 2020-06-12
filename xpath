@@ -1,0 +1,3 @@
+Xpath identification for attribute value using attribute name 
+
+//*[text()='City']/../following-sibling::div//input

@@ -1,0 +1,10 @@
+//            TakesScreenshot screenshot = (TakesScreenshot) driver;
+//            String base64Image = screenshot.getScreenshotAs(OutputType.BASE64);
+////            scenario.write("<img src=data:image/png;base64," + base64Image + ">"); //to see full image scrolling is needed https://github.com/prashant-ramcharan/courgette-jvm/issues/151
+//            scenario.write("<img class='col-lg-12' src='data:image/png;base64," + base64Image+ "'>"); // image is aligned to page https://github.com/prashant-ramcharan/courgette-jvm/issues/155
+            scenario.write("Scenario failed so capturing a screenshot");
+
+            TakesScreenshot screenshot = (TakesScreenshot) driver;
+            byte[] image = screenshot.getScreenshotAs(OutputType.BYTES);
+
+            scenario.embed(image, "image/png"); //image shows on click of base64 text  https://github.com/prashant-ramcharan/courgette-jvm/issues/157

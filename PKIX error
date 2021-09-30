@@ -1,0 +1,4 @@
+@BeforeClass
+public static void setup(){
+    RestAssured.useRelaxedHTTPSValidation();
+}

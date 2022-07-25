@@ -1,0 +1,56 @@
+// Used to convert the csv to data provider where the csv is stored as a spearate repo.
+
+private List<String> getCSVRow(String csvRow) {
+        List<String> row = new ArrayList<>();
+        String COMMA_DELIMITER = ",";
+        try (Scanner rowScanner = new Scanner(csvRow)) {
+            
+            rowScanner.useDelimiter(COMMA_DELIMITER);
+            while (rowScanner.hasNext()) {
+                String cell = rowScanner.next();
+                if (cell.equals("null")) {
+                    row.add(null);
+                } else {
+                    row.add(cell);
+                }
+            }
+        }
+        return row;
+    }
+
+    private Object[][] getCSVFromBitBucket(String csvFileName) {
+        List<List<String>> csvData = new ArrayList<>();
+        try {
+            URL bitbucketURL = new URL(REPOSITORY_URL + csvFileName);
+            HttpURLConnection bitBucketConnection = (HttpURLConnection) bitbucketURL.openConnection();
+            //For authentication
+            String encodedCredentials = Base64.getEncoder().encodeToString(("nkumar" + ":" + "MTEzNDAwMDQ3OTk4OsGFaXJkYjC4rwa7rVMvGIu9zVxt").getBytes(StandardCharsets.UTF_8));
+            bitBucketConnection.addRequestProperty("Authorization", "Basic  " + encodedCredentials);
+
+            bitBucketConnection.setRequestMethod(HTTP_GET);
+            bitBucketConnection.connect();
+
+            InputStream bitBucketInputStream = bitBucketConnection.getInputStream();
+            String streamDataString = IOUtils.toString(bitBucketInputStream, StandardCharsets.UTF_8);
+            JSONObject responseJSON = new JSONObject(streamDataString);
+            JSONArray jsonArray = responseJSON.getJSONArray(LINES);
+            for (Object o : jsonArray) {
+                JSONObject jsonObject = (JSONObject) o;
+                csvData.add(getCSVRow(jsonObject.getString(TEXT)));
+            }
+            bitBucketInputStream.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        csvData.remove(HEADER_LINE);
+        return csvData.stream().map(data -> data.toArray(new String[0])).toArray(String[][]::new);
+
+    }
+    
+    
+    //Example of data provider how to use
+    
+     @DataProvider(name = "missingPackageValidation")
+    public Object[][] missingPackageValidation() {
+        return getCSVFromBitBucket("missingPackageValidation.csv");
+    }

@@ -19,11 +19,15 @@ private List<String> getCSVRow(String csvRow) {
     }
 
     private Object[][] getCSVFromBitBucket(String csvFileName) {
+            public static final String LINES = "lines";
+            public static final String HTTP_GET = "GET";
+            public static final String TEXT = "text";
+            public static final int HEADER_LINE = 0;
         List<List<String>> csvData = new ArrayList<>();
         try {
             URL bitbucketURL = new URL(REPOSITORY_URL + csvFileName);
             HttpURLConnection bitBucketConnection = (HttpURLConnection) bitbucketURL.openConnection();
-            //For authentication
+            //For authentication, UN and token from bit bucket
             String encodedCredentials = Base64.getEncoder().encodeToString(("nkumar" + ":" + "MTEzNDAwMDQ3OTk4OsGFaXJkYjC4rwa7rVMvGIu9zVxt").getBytes(StandardCharsets.UTF_8));
             bitBucketConnection.addRequestProperty("Authorization", "Basic  " + encodedCredentials);
 
@@ -46,7 +50,23 @@ private List<String> getCSVRow(String csvRow) {
         return csvData.stream().map(data -> data.toArray(new String[0])).toArray(String[][]::new);
 
     }
-    
+    // read CSV from project folder main-resources and convert to data provider 
+    private Object[][] getCSVData(String csvFileName) {
+        List<List<String>> csvData = new ArrayList<>();
+        try {
+        InputStream inputStream = DataProviders.class.getClassLoader().getResourceAsStream(csvFileName);
+        assert inputStream != null;
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+        String row;
+        while ((row = bufferedReader.readLine()) != null) {
+        csvData.add(getCSVRow(row));
+        }
+        } catch (Exception e) {
+        e.printStackTrace();
+        }
+        csvData.remove(HEADER_LINE);
+        return csvData.stream().map(data -> data.toArray(new String[0])).toArray(String[][]::new);
+        }
     
     //Example of data provider how to use
     

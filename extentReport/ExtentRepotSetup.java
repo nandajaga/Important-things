@@ -1,6 +1,6 @@
 package extentReport.testng.listeners;
 
-import com.aim.automation.helpers.PropertiesUtils;
+import com.abc.automation.helpers.PropertiesUtils;
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.reporter.ExtentSparkReporter;
 import com.aventstack.extentreports.reporter.configuration.Theme;
@@ -15,9 +15,7 @@ import org.testng.ITestResult;
 import java.io.File;
 import java.util.Properties;
 
-/*
- * Created by sbioi 07/01/2020
- */
+
 
 public class ExtentRepotSetup {
 

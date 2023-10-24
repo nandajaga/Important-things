@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * The class has method to customize the Console output and returns the output in String Format
- * Created by sbioi 29/06/2020
+ * 
  */
 public class ConsoleOutputStream {
     private ByteArrayOutputStream baos;

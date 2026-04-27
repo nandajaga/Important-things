@@ -1,0 +1,180 @@
+Here are all functional test cases based on the M3 Acceptance Criteria:
+
+---
+
+# Functional Test Cases — Pharmacy Benefit Checker (Sprint 14)
+
+---
+
+## ✅ Step 1 + 2 — Test Case Table
+
+---
+
+### TC-FUNC-AC1-01 | Authentication Gate
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC1-01 |
+| **AC Reference** | AC1 — Member must be authenticated before accessing the feature. Guest access not permitted |
+| **Scenario** | Unauthenticated user attempts to access the Pharmacy Benefit Checker directly via URL |
+| **Pre-conditions** | User is NOT logged in. Pharmacy Benefit Checker URL is known |
+| **Test Steps** | 1. Open a browser in incognito/guest mode. 2. Navigate directly to the Pharmacy Benefit Checker URL on the member portal. 3. Observe system behavior |
+| **Expected Result** | System redirects user to the login page. The Pharmacy Benefit Checker feature is not accessible without authentication |
+| **Pass Criteria** | User is redirected to login. No benefit data is displayed to unauthenticated user |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC2-01 | Drug Name Search (Desktop)
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC2-01 |
+| **AC Reference** | AC2 — Member can search for a drug by name on desktop |
+| **Scenario** | Logged-in member searches for a drug by entering its name on the desktop portal |
+| **Pre-conditions** | Member is logged in. Desktop browser is being used. Drug name is a valid formulary entry |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to the Pharmacy Benefit Checker page. 3. Enter a known drug name (e.g., "Metformin") in the search field. 4. Submit the search. 5. Observe the results |
+| **Expected Result** | Search results are returned and display coverage status, formulary tier, and copay indicator for the searched drug |
+| **Pass Criteria** | Results load successfully. All three data fields (coverage status, tier, copay) are visible on desktop |
+| **Severity** | 🟡 Medium |
+
+---
+
+### TC-FUNC-AC3-01 | Search Results Display — All Required Fields
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC3-01 |
+| **AC Reference** | AC3 — Results must show coverage status, formulary tier (1–4), and copay estimate with ACA disclaimer |
+| **Scenario** | Logged-in member searches for a covered drug and verifies all required result fields are displayed |
+| **Pre-conditions** | Member is logged in on desktop. Searched drug exists in the formulary and is covered |
+| **Test Steps** | 1. Log in as a valid member on a standard (non-batch-cache) plan. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a drug confirmed as "Covered" in the formulary. 4. Review the results page. 5. Verify presence of: (a) Coverage status label, (b) Tier number (1–4), (c) Copay estimate, (d) ACA disclaimer text |
+| **Expected Result** | All four elements are present on the results screen: Coverage = "Covered", Tier value between 1–4, copay indicator, and ACA disclaimer |
+| **Pass Criteria** | No field is missing or blank. Tier value is within the range 1–4. Disclaimer is visible without scrolling on desktop |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC4-01 | ACA Disclaimer — Compliance Validation
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC4-01 |
+| **AC Reference** | AC4 — All cost estimates must display the ACA-required disclaimer about cost variability |
+| **Scenario** | Verify ACA disclaimer appears on every search result that includes a cost/copay estimate |
+| **Pre-conditions** | Member is logged in. At least one drug search returns a copay estimate |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Search for 3 different drugs across different tiers. 4. On each results screen, check for the disclaimer text indicating actual costs may vary based on deductible and network status. 5. Document presence/absence for each search |
+| **Expected Result** | ACA disclaimer appears on every results screen where a copay estimate is displayed — without exception |
+| **Pass Criteria** | Disclaimer is present on 100% of results screens with cost data. Missing disclaimer on even one result = test FAIL |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC5-01 | Last-Updated Timestamp — Batch Cache Plans
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC5-01 |
+| **AC Reference** | AC5 — HMO Classic, PPO Select, CHIP members must see a last-updated timestamp on results |
+| **Scenario** | Member on a batch-cache plan searches for a drug and verifies the last-updated timestamp is displayed |
+| **Pre-conditions** | Member is logged in with an HMO Classic, PPO Select, or CHIP plan. Nightly batch cache has been populated |
+| **Test Steps** | 1. Log in as a member on HMO Classic plan. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a known drug. 4. Observe the results page. 5. Verify a last-updated timestamp is displayed. 6. Confirm the timestamp reflects the most recent nightly batch run (within 24 hours). 7. Repeat steps 1–6 for PPO Select and CHIP plan members |
+| **Expected Result** | A last-updated timestamp is visible on results for all three batch-cache plan types. Timestamp is accurate to the last nightly batch |
+| **Pass Criteria** | Timestamp present and visible for HMO Classic, PPO Select, and CHIP. Timestamp absent for real-time plan members |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC6-01 | Real-Time Data — Non-Batch Plans
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC6-01 |
+| **AC Reference** | AC6 — All non-batch-cache plan types must return real-time formulary data |
+| **Scenario** | Member on a standard (non-batch) plan receives real-time formulary results |
+| **Pre-conditions** | Member is logged in on a plan that is NOT HMO Classic, PPO Select, or CHIP. Formulary API is operational |
+| **Test Steps** | 1. Log in as a member on a standard real-time plan. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a drug. 4. Note the result and timestamp (if any). 5. Have a test data admin update the drug's formulary status in the system. 6. Search for the same drug again immediately. 7. Verify the updated status is reflected |
+| **Expected Result** | The second search reflects the updated formulary status in real time — no 24-hour lag |
+| **Pass Criteria** | Updated status appears immediately after the formulary change. No stale data for non-batch plan members |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC7-01 | Drug Not Found — Compliant Messaging
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC7-01 |
+| **AC Reference** | AC7 — Drug not in formulary must show "Requires Review" — NOT auto "Not Covered" |
+| **Scenario** | Member searches for a drug that does not exist in the formulary and verifies the correct message is displayed |
+| **Pre-conditions** | Member is logged in. A drug name is confirmed to NOT be in the formulary database |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a drug name confirmed as absent from the formulary. 4. Observe the message displayed on the results screen |
+| **Expected Result** | System displays a message indicating the drug requires further review. System does NOT display "Not Covered" |
+| **Pass Criteria** | Result message does not contain "Not Covered" language. Message explicitly indicates further review is needed |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-FUNC-AC8-01 | All Plan Types Supported
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC8-01 |
+| **AC Reference** | AC8 — Feature must support all plan types on the Carelon member portal |
+| **Scenario** | Members across multiple plan types can successfully search for a drug and receive results |
+| **Pre-conditions** | Test accounts exist for each plan type available on the Carelon portal. Drug name is valid across all plans |
+| **Test Steps** | 1. Log in as a member on Plan Type A (e.g., HMO Classic). 2. Search for a known drug. 3. Verify results are returned. 4. Log out. 5. Repeat steps 1–4 for each available plan type (PPO Select, CHIP, and all real-time plans). 6. Document results per plan type |
+| **Expected Result** | All plan types return a result — covered, not covered, or requires review — without error |
+| **Pass Criteria** | No plan type returns a system error or blank result. All plans receive appropriate data source (real-time or batch-cache) |
+| **Severity** | 🟡 Medium |
+
+---
+
+### TC-FUNC-AC9-01 | Mobile Out of Scope Enforcement
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC9-01 |
+| **AC Reference** | AC9 — Mobile experience is out of scope for Sprint 14. Feature is desktop-only |
+| **Scenario** | Verify the feature is functional and complete on desktop. Mobile optimization is not tested |
+| **Pre-conditions** | Member is logged in on a desktop browser (Chrome/Edge/Firefox latest versions) |
+| **Test Steps** | 1. Log in as a valid member on a desktop browser. 2. Navigate to Pharmacy Benefit Checker. 3. Complete a drug search. 4. Verify all AC elements are displayed correctly on desktop viewport. 5. Note: Do NOT test on mobile device for Sprint 14 — mobile is out of scope |
+| **Expected Result** | Full feature functions correctly on desktop. No mobile test execution required in Sprint 14 |
+| **Pass Criteria** | Desktop experience is complete and all ACs pass. Mobile regression noted as deferred |
+| **Severity** | 🟡 Medium |
+
+> ⚠️ **Flag:** AC9 as written is a scope exclusion, not a testable criterion. There is no positive behavior to verify beyond desktop completeness. Recommend adding a separate AC for minimum mobile compatibility baseline (e.g., "feature must not break existing mobile portal pages") — currently this is a **Gap** requiring stakeholder clarification.
+
+---
+
+### TC-FUNC-AC10-01 | Pricing API — Out of Scope Enforcement
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-FUNC-AC10-01 |
+| **AC Reference** | AC10 — Pricing API (actual out-of-pocket cost) is out of scope. Only copay tier label displayed |
+| **Scenario** | Verify that no actual dollar cost is displayed — only the copay tier label (Tier 1–4) |
+| **Pre-conditions** | Member is logged in. Drug search returns a covered result with a tier value |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a covered drug. 4. Review the cost section of the results. 5. Verify only the copay tier label is displayed (e.g., "Tier 2"). 6. Verify no dollar amount, deductible calculation, or out-of-pocket cost figure is shown |
+| **Expected Result** | Results show only the tier label. No dollar value or pricing API output is present |
+| **Pass Criteria** | No dollar amount displayed. Tier label present. No null/blank/error field where pricing data would appear |
+| **Severity** | 🟡 Medium |
+
+> ⚠️ **Flag:** AC10 is a negative scope boundary — it defines what should NOT appear rather than what should. Risk: if a blank or "$0" placeholder appears where pricing data would go, it may confuse members. Recommend adding explicit AC for what the UI shows in the cost section when pricing API is not integrated.
+
+---
+
+## Summary Table
+
+| Test ID | AC | Scenario | Severity | Flag? |
+|---------|-----|----------|----------|-------|
+| TC-FUNC-AC1-01 | AC1 | Auth gate — unauthenticated redirect | 🔴 High | — |
+| TC-FUNC-AC2-01 | AC2 | Drug name search on desktop | 🟡 Medium | — |
+| TC-FUNC-AC3-01 | AC3 | All result fields displayed | 🔴 High | — |
+| TC-FUNC-AC4-01 | AC4 | ACA disclaimer on all cost results | 🔴 High | — |
+| TC-FUNC-AC5-01 | AC5 | Timestamp for batch-cache plans | 🔴 High | — |
+| TC-FUNC-AC6-01 | AC6 | Real-time data for non-batch plans | 🔴 High | — |
+| TC-FUNC-AC7-01 | AC7 | Drug not found — compliant message | 🔴 High | — |
+| TC-FUNC-AC8-01 | AC8 | All plan types supported | 🟡 Medium | — |
+| TC-FUNC-AC9-01 | AC9 | Desktop-only scope | 🟡 Medium | ⚠️ Scope exclusion, not testable as written |
+| TC-FUNC-AC10-01 | AC10 | No pricing API data displayed | 🟡 Medium | ⚠️ Negative boundary — UI placeholder risk |

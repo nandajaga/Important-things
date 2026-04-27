@@ -1,0 +1,327 @@
+# Negative Test Cases — Pharmacy Benefit Checker (Sprint 14)
+### Prompt B — Structured by Focus Area
+
+---
+
+## 🔐 Area 1: Authentication Failure (AUTH)
+
+### TC-NEG-AUTH-01 | Direct URL Access Without Login
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-AUTH-01 |
+| **AC Reference** | AC1 — Member must be authenticated. Guest access not permitted |
+| **Scenario** | Unauthenticated user attempts to access Pharmacy Benefit Checker via direct URL |
+| **Pre-conditions** | User is NOT logged in. Feature URL is known |
+| **Test Steps** | 1. Open browser in incognito/private mode. 2. Copy and paste the Pharmacy Benefit Checker URL directly into the address bar. 3. Press Enter. 4. Observe system behavior |
+| **Expected Result** | System immediately redirects to the member login page. No drug data, formulary results, or UI elements of the feature are exposed |
+| **Pass Criteria** | Redirect to login occurs. Zero benefit data visible to unauthenticated user |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-AUTH-02 | Expired Session Mid-Search
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-AUTH-02 |
+| **AC Reference** | AC1 — Authentication required throughout the session |
+| **Scenario** | Member's session token expires while actively using the Pharmacy Benefit Checker |
+| **Pre-conditions** | Member is logged in. Session timeout is configurable in test environment |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Let the session expire (or manually invalidate the auth token via dev tools). 4. Enter a valid drug name. 5. Click Search. 6. Observe system response |
+| **Expected Result** | System detects the expired session before returning results. Member is redirected to login with a session expiry message. No formulary data is returned |
+| **Pass Criteria** | No data returned on expired session. Login redirect occurs. Session expiry message displayed |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-AUTH-03 | Back Button Access After Logout
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-AUTH-03 |
+| **AC Reference** | AC1 — No access without active authentication |
+| **Scenario** | Member logs out then uses browser back button to return to the Pharmacy Benefit Checker results page |
+| **Pre-conditions** | Member has previously completed a drug search. Member then logs out |
+| **Test Steps** | 1. Log in as a valid member. 2. Search for a drug — results page loads. 3. Log out from the portal. 4. Press browser Back button. 5. Observe whether the previous results page is accessible |
+| **Expected Result** | Browser does not display cached results. Member is redirected to login or shown a session expired message |
+| **Pass Criteria** | No cached formulary results visible post-logout. Redirect to login on back navigation |
+| **Severity** | 🔴 High |
+
+---
+
+## 🔍 Area 2: Invalid Drug Search Input (SRCH)
+
+### TC-NEG-SRCH-01 | Empty Search Field Submission
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-SRCH-01 |
+| **AC Reference** | AC2 — Member can search for a drug by entering its name |
+| **Scenario** | Member clicks Search without entering anything in the drug name field |
+| **Pre-conditions** | Member is logged in on desktop. Search field is empty |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Leave drug name field completely blank. 4. Click Search / Submit. 5. Observe system response |
+| **Expected Result** | System displays an inline validation message prompting member to enter a drug name. No API call is triggered. No results page loads |
+| **Pass Criteria** | Validation message visible. No blank results page. No system error or API call fired |
+| **Severity** | 🟡 Medium |
+
+---
+
+### TC-NEG-SRCH-02 | Special Characters / SQL Injection Attempt
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-SRCH-02 |
+| **AC Reference** | AC2 — Drug name search input handling |
+| **Scenario** | Member enters special characters or a potential injection string into the drug name field |
+| **Pre-conditions** | Member is logged in on desktop |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Enter `'; DROP TABLE formulary;--` in the drug name field. 4. Submit search. 5. Observe system response. 6. Repeat with `<script>alert('xss')</script>` |
+| **Expected Result** | System sanitizes input and returns a compliant "drug not found / requires further review" message. No system error, no database error, no script execution |
+| **Pass Criteria** | No 500 error. No raw error message exposed. Input sanitized. No XSS or injection executed |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-SRCH-03 | Drug Name Not in Formulary
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-SRCH-03 |
+| **AC Reference** | AC7 — Drug not found must show "Requires Review" not "Not Covered" |
+| **Scenario** | Member searches for a real drug name that exists but is absent from the Carelon formulary database |
+| **Pre-conditions** | Member is logged in. Drug name is confirmed NOT in the formulary |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Enter a drug name confirmed absent from the formulary. 4. Submit search. 5. Read the result message carefully — word for word |
+| **Expected Result** | System returns "Requires Further Review" or equivalent compliant message. The phrase "Not Covered" does NOT appear anywhere on the results screen |
+| **Pass Criteria** | "Not Covered" absent from result. Compliant review message displayed. This is a compliance defect if failed |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-SRCH-04 | Whitespace-Only Input
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-SRCH-04 |
+| **AC Reference** | AC2 — Drug name search input handling |
+| **Scenario** | Member enters only spaces in the drug name field and submits |
+| **Pre-conditions** | Member is logged in on desktop |
+| **Test Steps** | 1. Log in as a valid member. 2. Navigate to Pharmacy Benefit Checker. 3. Enter 5–10 spaces in the drug name field. 4. Click Search. 5. Observe system response |
+| **Expected Result** | System treats whitespace-only input as empty and displays the same validation message as TC-NEG-SRCH-01. No API call is made |
+| **Pass Criteria** | Whitespace not accepted as valid input. Validation message shown. No blank results page |
+| **Severity** | 🟡 Medium |
+
+---
+
+## 🏥 Area 3: Plan Type Edge Cases (PLAN)
+
+### TC-NEG-PLAN-01 | Stale Data Served Without Timestamp — Batch Cache Plan
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-PLAN-01 |
+| **AC Reference** | AC5 — Batch-cache plan members must see last-updated timestamp |
+| **Scenario** | Member on HMO Classic plan receives formulary results but no last-updated timestamp is displayed |
+| **Pre-conditions** | Member logged in on HMO Classic plan. Nightly batch has run. Timestamp rendering is being tested |
+| **Test Steps** | 1. Log in as an HMO Classic member. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a known drug. 4. Inspect the results screen for the presence of a last-updated timestamp. 5. Repeat for PPO Select and CHIP plan members |
+| **Expected Result** | Every result for HMO Classic, PPO Select, and CHIP members includes a visible last-updated timestamp. Absence of timestamp = defect |
+| **Pass Criteria** | Timestamp present for all 3 batch-cache plan types. Missing timestamp on any batch-cache result = FAIL |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-PLAN-02 | Batch Cache Failure — No Data Refresh Overnight
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-PLAN-02 |
+| **AC Reference** | AC5, AC6 — Data freshness and real-time vs batch distinction |
+| **Scenario** | Nightly batch job fails — HMO Classic member searches and receives either no results or silently stale data with no warning |
+| **Pre-conditions** | Batch cache job simulated as failed in test environment. Member on HMO Classic plan is logged in |
+| **Test Steps** | 1. Simulate batch cache failure (disable or skip nightly refresh in test env). 2. Log in as HMO Classic member. 3. Search for a drug. 4. Observe: (a) whether results are displayed, (b) whether a staleness warning is shown, (c) whether the timestamp reflects the last successful batch |
+| **Expected Result** | System either: (a) shows last known data WITH a clear staleness warning and the timestamp of the last successful run, OR (b) displays a message that data is temporarily unavailable. It must NOT silently serve outdated data |
+| **Pass Criteria** | Silent stale data with no warning = FAIL. Member must always know data currency status |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-PLAN-03 | Batch Cache Timestamp Shown for Real-Time Plan Member
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-PLAN-03 |
+| **AC Reference** | AC5, AC6 — Timestamp only for batch-cache plans |
+| **Scenario** | Member on a real-time plan incorrectly sees a batch-cache last-updated timestamp — indicating plan type misdetection |
+| **Pre-conditions** | Member is logged in on a standard real-time plan (not HMO Classic, PPO Select, or CHIP) |
+| **Test Steps** | 1. Log in as a member on a real-time plan. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a known drug. 4. Inspect results screen for presence of a last-updated timestamp |
+| **Expected Result** | No last-updated timestamp appears for real-time plan members. Results display without any batch-cache staleness indicator |
+| **Pass Criteria** | Timestamp field absent for real-time plan members. Presence of timestamp = plan type detection bug |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-PLAN-04 | Unknown / Unrecognized Plan Type
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-PLAN-04 |
+| **AC Reference** | AC8 — Feature must support all plan types |
+| **Scenario** | Member's plan type cannot be determined by the system — edge-case or misconfigured account |
+| **Pre-conditions** | Test account configured with an unrecognized or null plan type value |
+| **Test Steps** | 1. Log in as a member with a null or unrecognized plan type. 2. Navigate to Pharmacy Benefit Checker. 3. Search for a known drug. 4. Observe system response — does it error, default to real-time, or fall back gracefully? |
+| **Expected Result** | System handles unrecognized plan type gracefully — either defaults to real-time data with a notice OR displays a meaningful error. It must NOT crash or expose a raw system error to the member |
+| **Pass Criteria** | No 500 error shown to member. Graceful fallback or clear error message displayed |
+| **Severity** | 🟡 Medium |
+
+---
+
+## ⚖️ Area 4: Compliance Display Failures (COMP)
+
+### TC-NEG-COMP-01 | ACA Disclaimer Missing on Tier Result
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-COMP-01 |
+| **AC Reference** | AC4 — ACA disclaimer mandatory on all cost estimate screens |
+| **Scenario** | Drug search returns a copay tier result but the ACA disclaimer is absent from the results screen |
+| **Pre-conditions** | Member is logged in. Drug search returns a Tier 1–4 result with copay indicator |
+| **Test Steps** | 1. Log in as a valid member. 2. Search for a drug that returns a Tier 1 result. 3. Inspect results screen — document whether ACA disclaimer is present. 4. Repeat for Tier 2, Tier 3, and Tier 4 results. 5. Record disclaimer presence/absence per tier |
+| **Expected Result** | ACA disclaimer present on 100% of results screens showing a copay/tier value. No tier result is served without the disclaimer |
+| **Pass Criteria** | Disclaimer absent on even ONE tier result = immediate compliance FAIL. Carelon has prior audit findings on this |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-COMP-02 | ACA Disclaimer Truncated or Incorrectly Worded
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-COMP-02 |
+| **AC Reference** | AC4 — Disclaimer must convey that actual costs may vary by deductible and network status |
+| **Scenario** | ACA disclaimer appears but is truncated, cut off by UI overflow, or uses non-compliant wording |
+| **Pre-conditions** | Member is logged in on desktop. Drug search returns a tier result |
+| **Test Steps** | 1. Log in as a valid member. 2. Search for a drug returning a tier result. 3. Locate the ACA disclaimer on the results screen. 4. Verify the complete disclaimer text is visible — not cut off. 5. Verify wording includes reference to deductible AND network status variability. 6. Resize browser window to check disclaimer visibility at different widths |
+| **Expected Result** | Full disclaimer text is visible at all standard desktop resolutions. Wording is complete and compliant — no truncation |
+| **Pass Criteria** | No truncation. Both "deductible" and "network status" referenced in disclaimer text |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-COMP-03 | Timestamp Missing for Batch Plan After UI Change
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-COMP-03 |
+| **AC Reference** | AC5 — Timestamp mandatory for HMO Classic, PPO Select, CHIP |
+| **Scenario** | A recent UI update inadvertently removes or hides the last-updated timestamp for batch-cache plan members |
+| **Pre-conditions** | Member logged in on HMO Classic. A recent front-end deployment has occurred in the test environment |
+| **Test Steps** | 1. Log in as HMO Classic member post-deployment. 2. Search for a drug. 3. Inspect full results page — including below the fold. 4. Check whether timestamp renders correctly or is hidden by CSS/layout issue |
+| **Expected Result** | Timestamp is fully visible above the fold on desktop without scrolling. Not hidden, collapsed, or rendered in white text on white background |
+| **Pass Criteria** | Timestamp visible and readable. Hidden or zero-opacity timestamp = FAIL |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-COMP-04 | Dollar Amount Displayed Despite Pricing API Out of Scope
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-COMP-04 |
+| **AC Reference** | AC10 — Only copay tier label displayed. Pricing API is out of scope |
+| **Scenario** | A partial or accidental pricing API integration causes a dollar value, $0, or null to appear in the cost field |
+| **Pre-conditions** | Member is logged in. Drug search returns a covered result |
+| **Test Steps** | 1. Log in as a valid member. 2. Search for a covered drug. 3. Inspect the cost/pricing section of the results screen. 4. Check for: dollar amounts, "$0.00", "null", "undefined", or any placeholder suggesting pricing API output |
+| **Expected Result** | Only copay tier label displayed (e.g., "Tier 2"). No dollar value, no null, no placeholder in the cost field |
+| **Pass Criteria** | Any dollar or null value in cost section = FAIL. Tier label only is the correct and expected state |
+| **Severity** | 🟡 Medium |
+
+---
+
+## 🔌 Area 5: API Failure Scenarios (API)
+
+### TC-NEG-API-01 | Formulary API Completely Unavailable
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-API-01 |
+| **AC Reference** | AC3, AC6 — Results depend on formulary API availability |
+| **Scenario** | Formulary API is down — member searches for a drug and receives no response from the API |
+| **Pre-conditions** | Member is logged in. Formulary API is simulated as unavailable (timeout or connection refused) in test environment |
+| **Test Steps** | 1. Simulate formulary API downtime in test environment. 2. Log in as a valid member. 3. Navigate to Pharmacy Benefit Checker. 4. Search for a known drug. 5. Observe system behavior — does it wait, timeout, or show an error? |
+| **Expected Result** | System displays a user-friendly error message indicating the service is temporarily unavailable. No raw API error, stack trace, or technical message is exposed to the member |
+| **Pass Criteria** | Member-facing error message shown. No raw error exposed. No indefinite loading spinner with no feedback |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-API-02 | Formulary API Timeout — Slow Response
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-API-02 |
+| **AC Reference** | AC3, AC6 — Formulary API response dependency |
+| **Scenario** | Formulary API responds but takes longer than the configured timeout threshold |
+| **Pre-conditions** | Member is logged in. API is configured to respond with a deliberate delay exceeding timeout threshold in test environment |
+| **Test Steps** | 1. Simulate API slow response (delay beyond timeout threshold). 2. Log in as a valid member. 3. Search for a known drug. 4. Observe: (a) whether a loading indicator appears, (b) how long before timeout triggers, (c) what message is shown after timeout |
+| **Expected Result** | System shows a loading indicator during the wait. After timeout, a clear message is displayed. Member is given an option to retry. No indefinite hang |
+| **Pass Criteria** | Loading state visible. Timeout handled gracefully. Retry option available. No system freeze |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-API-03 | Formulary API Returns Malformed Response
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-API-03 |
+| **AC Reference** | AC3 — All result fields must be present and correctly rendered |
+| **Scenario** | Formulary API returns a 200 OK response but the payload is malformed — missing required fields or unexpected data types |
+| **Pre-conditions** | Member is logged in. Test environment configured to return a malformed API response (e.g., tier field returns a string instead of integer, or JSON is incomplete) |
+| **Test Steps** | 1. Configure test environment to return malformed API payload. 2. Log in as a valid member. 3. Search for a drug. 4. Observe whether the system: (a) crashes, (b) renders partial data, (c) handles gracefully with an error message |
+| **Expected Result** | System detects the malformed response and displays a generic error message to the member. No partial or corrupted data is displayed. No raw JSON or technical error is shown |
+| **Pass Criteria** | No partial data rendered. No raw error exposed. Member-friendly fallback message shown |
+| **Severity** | 🔴 High |
+
+---
+
+### TC-NEG-API-04 | Batch Cache Not Populated — Morning Access Before First Run
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | TC-NEG-API-04 |
+| **AC Reference** | AC5 — Batch cache data must include last-updated timestamp |
+| **Scenario** | Member on HMO Classic accesses the feature before the nightly batch job has completed for the first time (e.g., new environment setup or first day after go-live) |
+| **Pre-conditions** | Member on HMO Classic plan. Batch cache has never been populated in the environment |
+| **Test Steps** | 1. Set up a clean test environment with no batch cache data. 2. Log in as an HMO Classic member. 3. Navigate to Pharmacy Benefit Checker. 4. Search for a drug. 5. Observe system response — does it error, show empty results, or display a meaningful message? |
+| **Expected Result** | System recognizes empty cache state and displays a meaningful message (e.g., "Formulary data is not yet available. Please check back later."). It must NOT show empty results silently or crash |
+| **Pass Criteria** | Meaningful message shown. No silent empty result. No system error exposed to member |
+| **Severity** | 🔴 High |
+
+---
+
+## Complete Negative Test Case Summary
+
+| Test ID | Area | Scenario | Severity |
+|---------|------|----------|----------|
+| TC-NEG-AUTH-01 | Auth | Direct URL access without login | 🔴 High |
+| TC-NEG-AUTH-02 | Auth | Session expiry mid-search | 🔴 High |
+| TC-NEG-AUTH-03 | Auth | Back button access after logout | 🔴 High |
+| TC-NEG-SRCH-01 | Search | Empty search field | 🟡 Medium |
+| TC-NEG-SRCH-02 | Search | Special characters / injection attempt | 🔴 High |
+| TC-NEG-SRCH-03 | Search | Drug not in formulary — wrong message | 🔴 High |
+| TC-NEG-SRCH-04 | Search | Whitespace-only input | 🟡 Medium |
+| TC-NEG-PLAN-01 | Plan | Timestamp missing for batch-cache plan | 🔴 High |
+| TC-NEG-PLAN-02 | Plan | Batch cache failure — stale data no warning | 🔴 High |
+| TC-NEG-PLAN-03 | Plan | Timestamp shown for real-time plan member | 🔴 High |
+| TC-NEG-PLAN-04 | Plan | Unrecognized plan type — no graceful fallback | 🟡 Medium |
+| TC-NEG-COMP-01 | Compliance | ACA disclaimer missing on tier result | 🔴 High |
+| TC-NEG-COMP-02 | Compliance | ACA disclaimer truncated or misworded | 🔴 High |
+| TC-NEG-COMP-03 | Compliance | Timestamp hidden after UI deployment | 🔴 High |
+| TC-NEG-COMP-04 | Compliance | Dollar amount shown despite pricing API out of scope | 🟡 Medium |
+| TC-NEG-API-01 | API | Formulary API completely unavailable | 🔴 High |
+| TC-NEG-API-02 | API | Formulary API timeout — slow response | 🔴 High |
+| TC-NEG-API-03 | API | API returns malformed response | 🔴 High |
+| TC-NEG-API-04 | API | Batch cache never populated — empty state | 🔴 High |
+
+---
+
+> 💡 **Sr. QA Priority Call:** The most critical cluster for Sprint 14 sign-off is **COMP + AUTH**. TC-NEG-COMP-01 (missing ACA disclaimer) and TC-NEG-AUTH-03 (back button post-logout) are the two most likely to be missed in standard test cycles but carry the highest regulatory and security exposure at Carelon. Both should be run as **mandatory regression tests** on every future release touching this feature.

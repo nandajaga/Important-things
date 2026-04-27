@@ -1,0 +1,153 @@
+# Edge Cases — Pharmacy Benefit Checker (Sprint 14)
+### Scenarios a Standard Test Suite Would Miss
+
+---
+
+## EC-01 | Concurrent Sessions — Same Member, Two Devices
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-01 |
+| **Scenario** | A member is logged into the Pharmacy Benefit Checker on a desktop browser at home AND simultaneously on a work laptop. They search for the same drug on both devices within seconds of each other |
+| **Why Risky** | If session management isn't properly isolated, one session could receive the other's results, or a plan type change triggered mid-session could cause one device to show stale plan data while the other shows updated data. In a healthcare context, a member acting on wrong formulary data could make incorrect medication decisions |
+| **Expected Behavior** | Both sessions operate independently and return identical, correct results for the same member. No cross-session data bleed. If one session is invalidated (e.g., security policy allows only one active session), the older session receives a clear "session ended" message — not a silent failure |
+| **Likelihood** | 🟡 Medium |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-02 | Brand Name vs Generic Drug Search — Different Results
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-02 |
+| **Scenario** | A member searches for "Lipitor" (brand name) — the formulary only contains "Atorvastatin" (the generic equivalent). The system must decide: return the generic match, return no result, or prompt the member |
+| **Why Risky** | If the system returns "Requires Further Review" or "Not Covered" for "Lipitor" when the generic IS covered, the member may believe their medication is not covered and either skip it or pay out of pocket unnecessarily. This is both a member experience failure and a potential liability issue |
+| **Expected Behavior** | System either: (a) maps brand name to generic and returns the generic's formulary status with a note ("Showing results for Atorvastatin, the generic equivalent of Lipitor"), OR (b) returns no match and prompts the member to search by generic name. It must NOT return "Not Covered" if the generic equivalent is covered |
+| **Likelihood** | 🔴 High |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-03 | Drug Name Misspelling — Fuzzy Match or Hard Fail
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-03 |
+| **Scenario** | Member types "Metfromin" instead of "Metformin" — a common misspelling of a widely used diabetes medication. The formulary API performs an exact string match and returns no result |
+| **Why Risky** | Members are not clinical professionals — misspellings are expected and frequent, especially on mobile. If the system returns "Requires Review" or a no-result state for every minor misspelling, members lose trust in the tool and call the member helpline instead, increasing operational cost. More critically, a member may assume a drug is not covered because of a typo |
+| **Expected Behavior** | System either: (a) performs fuzzy matching and returns the closest formulary match with a note ("Did you mean: Metformin?"), OR (b) clearly indicates no exact match was found and suggests correcting the spelling. It must NOT silently return "Not Covered" for a misspelled drug name |
+| **Likelihood** | 🔴 High |
+| **Impact** | 🟡 Medium |
+
+---
+
+## EC-04 | Recent Plan Change — Which Formulary Is Applied?
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-04 |
+| **Scenario** | A member switched from PPO Select (batch-cache plan) to a standard real-time plan effective today. They log in and search for a drug. The system must determine which plan's formulary to use — the old plan or the new one |
+| **Why Risky** | This is one of the highest-risk data integrity scenarios in healthcare systems. If the system applies the old plan's formulary (possibly from last night's batch cache), the member sees coverage information that no longer applies to them. They could go to a pharmacy expecting a Tier 2 copay and discover they are now on a different plan with a different tier structure — causing financial surprise and eroding trust |
+| **Expected Behavior** | System applies the formulary of the member's current active plan as of today's effective date. If plan change processing has a lag, system displays a message: "Your plan was recently updated. Results shown reflect your new plan. If you believe this is incorrect, please contact member services." No residual batch-cache data from the old plan is served |
+| **Likelihood** | 🟡 Medium |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-05 | Formulary Updated Exactly at Midnight — Timestamp Boundary
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-05 |
+| **Scenario** | The nightly batch job completes at exactly 00:00:00. A member on HMO Classic searches at 00:00:01 — one second after the cache refresh. The system must display the correct timestamp: the new batch run time, not the previous night's |
+| **Why Risky** | Timestamp boundary bugs are classic off-by-one errors in batch processing systems. If the timestamp displayed is the previous run (23:59 the prior evening) instead of 00:00 of the current day, the member sees data that appears to be nearly 24 hours old when it is actually 1 second old. For compliance, the timestamp must accurately reflect data currency — Sandra's email flagged this as an audit risk |
+| **Expected Behavior** | Timestamp displayed reflects the actual completion time of the most recent batch run — updated within seconds of the batch completing. No hardcoded "yesterday 11:59 PM" artifact. Timezone is explicit (e.g., "Last updated: Apr 27, 2026 at 12:00 AM ET") |
+| **Likelihood** | 🟡 Medium |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-06 | Mobile Browser Access — Degraded but Safe Experience
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-06 |
+| **Scenario** | Despite mobile being out of scope for Sprint 14, 61% of portal sessions are on mobile (per James's email). A member accesses the Pharmacy Benefit Checker on a mobile browser — the feature loads but renders in an unoptimized desktop layout |
+| **Why Risky** | Two distinct risks: (1) **Safety risk** — if the ACA disclaimer or last-updated timestamp is pushed off-screen or hidden on a small viewport, the member never sees it. This is a compliance failure even though mobile is "out of scope." (2) **Data risk** — if the mobile browser triggers partial page loads or truncated API responses, a member could see an incomplete result and make a healthcare decision based on it |
+| **Expected Behavior** | Even in the unoptimized mobile experience: (a) ACA disclaimer must be fully visible without horizontal scrolling, (b) last-updated timestamp must render for batch-cache plan members, (c) authentication gate must still function, (d) "Requires Review" messaging must appear correctly. The feature may look unpolished on mobile — but it must never be unsafe |
+| **Likelihood** | 🔴 High — 61% mobile traffic makes this near-certain |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-07 | Screen Reader Compatibility — Section 508 Accessibility
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-07 |
+| **Scenario** | A visually impaired member uses a screen reader (JAWS or NVDA) to navigate the Pharmacy Benefit Checker. They search for a drug and try to interpret the results — coverage status, tier, copay indicator, ACA disclaimer, and timestamp |
+| **Why Risky** | Section 508 of the Rehabilitation Act requires federal healthcare systems to be accessible. Carelon, operating in the ACA/federal healthcare space, is likely subject to this requirement. If formulary results are rendered as untagged divs, icons without alt text, or dynamic content that screen readers cannot detect, a visually impaired member cannot access the same benefit information as a sighted member — which is both a legal risk and an equity issue |
+| **Expected Behavior** | All result fields must have proper ARIA labels. Coverage status, tier, copay, and disclaimer text must be announced by screen reader in a logical reading order. Dynamic result loading must trigger an ARIA live region update so the screen reader announces new content without requiring the member to manually navigate to it. The ACA disclaimer must be read aloud — not skipped |
+| **Likelihood** | 🟡 Medium |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-08 | Partial Drug Name / Wildcard-Style Search
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-08 |
+| **Scenario** | Member types only "met" — a partial drug name — and submits. The formulary contains multiple drugs beginning with "met" (Metformin, Metoprolol, Methylprednisolone). It is undefined in the AC whether partial search is supported |
+| **Why Risky** | If partial search is not handled, the system returns an unexpected result (wrong drug's formulary data) or a no-match error that confuses the member. If partial search IS supported but not bounded, the API could return hundreds of matches, causing performance degradation or an unusable results list. Neither behavior is defined in any AC — this is a pure gap |
+| **Expected Behavior** | System either: (a) requires a minimum character threshold (e.g., 3+ characters) and returns a bounded list of matching drug names for the member to select from, OR (b) requires full drug name entry and displays inline guidance. Results must never auto-select a drug without member confirmation. A partial match must never show formulary data for the wrong drug |
+| **Likelihood** | 🔴 High — natural member behavior |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-09 | Member With Multiple Active Plans — Which Plan Is Used?
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-09 |
+| **Scenario** | A member is enrolled in two active plans simultaneously (e.g., primary coverage through employer and secondary Carelon coverage). The system must determine which plan's formulary to display — and whether to inform the member which plan is being referenced |
+| **Why Risky** | Dual-coverage members are common in employer + government plan scenarios. If the system defaults to the wrong plan silently, the member could check a drug's coverage under Plan A and go to the pharmacy expecting Plan A's copay — only to discover their Carelon plan (Plan B) has a different tier for that drug. This is not defined anywhere in the AC and is not listed as an out-of-scope exclusion either — making it a hidden assumption gap |
+| **Expected Behavior** | System clearly identifies which plan's formulary is being displayed (e.g., "Showing results for: Carelon PPO Select"). If multiple active plans exist, member is prompted to select which plan to check before results are shown. Results are never shown without plan identification |
+| **Likelihood** | 🟡 Medium |
+| **Impact** | 🔴 High |
+
+---
+
+## EC-10 | Drug Covered Under One Plan Tier But Member Recently Hit Deductible
+
+| Field | Detail |
+|-------|--------|
+| **Test ID** | EC-10 |
+| **Scenario** | The formulary shows a drug as Tier 2 with a standard copay. However, the member has not yet met their deductible for the plan year — meaning they will actually pay full cost, not the Tier 2 copay. The pricing API (which would know deductible status) is out of scope for Sprint 14 |
+| **Why Risky** | This is the exact scenario Sandra flagged in her compliance email — the ACA disclaimer exists precisely because of this gap. However, the risk is that if the disclaimer is present but visually de-emphasized (small font, grey text, below the fold), members will focus on the tier label and ignore the disclaimer entirely. The member walks to the pharmacy expecting a $15 Tier 2 copay and pays $180 because their deductible hasn't been met. The compliance risk is real even when the disclaimer technically exists |
+| **Expected Behavior** | ACA disclaimer must be: (a) visually prominent — not buried below results, (b) rendered before or alongside the tier/copay indicator — not after, (c) readable at all standard zoom levels including 200% zoom for accessibility. This edge case validates not just that the disclaimer exists (covered in functional tests) but that its placement and prominence actually serve the member's understanding |
+| **Likelihood** | 🔴 High — near-universal for members early in the plan year |
+| **Impact** | 🔴 High |
+
+---
+
+## Edge Case Summary
+
+| ID | Scenario | Likelihood | Impact | Primary Risk Type |
+|----|----------|------------|--------|-------------------|
+| EC-01 | Concurrent sessions — two devices | 🟡 Medium | 🔴 High | Data integrity |
+| EC-02 | Brand vs generic drug name | 🔴 High | 🔴 High | Member experience + liability |
+| EC-03 | Drug name misspelling | 🔴 High | 🟡 Medium | Member experience |
+| EC-04 | Recent plan change — which formulary? | 🟡 Medium | 🔴 High | Data integrity + compliance |
+| EC-05 | Timestamp at exact midnight boundary | 🟡 Medium | 🔴 High | Compliance + audit |
+| EC-06 | Mobile browser — unoptimized but must be safe | 🔴 High | 🔴 High | Compliance + safety |
+| EC-07 | Screen reader / Section 508 accessibility | 🟡 Medium | 🔴 High | Legal + equity |
+| EC-08 | Partial drug name search | 🔴 High | 🔴 High | Data integrity + UX |
+| EC-09 | Member with multiple active plans | 🟡 Medium | 🔴 High | Data integrity |
+| EC-10 | Deductible not met — disclaimer prominence | 🔴 High | 🔴 High | Compliance + member harm |
+
+---
+
+> 💡 **Sr. QA Call-Out:** The three edge cases with the highest combined likelihood AND impact are **EC-02** (brand vs generic), **EC-06** (mobile safety), and **EC-10** (deductible disclaimer prominence). All three are near-certain to occur in real member usage and all three have direct compliance or liability consequences. None of them would be caught by a standard functional test pass — which is exactly why edge case testing exists. Recommend raising EC-06 and EC-10 as **sprint 14 blockers** given the 61% mobile traffic reality and Carelon's prior ACA audit history.

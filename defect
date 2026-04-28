@@ -1,0 +1,270 @@
+Got it. The document has two phases and two prompts to run. Let me execute both fully.
+
+---
+
+# M5-Alt — Defect Triage Lab
+## Pharmacy Benefit Checker | Sprint 14 | CARE-PBC
+
+---
+
+# PHASE 1 — AI TRIAGE
+
+## Prompt A Output — Pattern Analysis
+
+---
+
+### 1. Component Clustering — Defect Concentration
+
+The defect batch clusters most heavily across three components:
+
+**Data Display (4 defects: CARE-PBC-002, CARE-PBC-003, CARE-PBC-009, CARE-PBC-010)**
+This is the highest-concentration component in the batch. Every defect here involves a rendering or data-sourcing failure — wrong label, wrong tier value, wrong plan's data, or a Unix epoch timestamp rendering. The concentration suggests that the Data Display layer was insufficiently tested across plan type combinations, particularly for batch-cache plan members. The component is doing work that spans both the formulary API response AND plan type detection logic — two upstream concerns — and failures in either surface here.
+
+**Formulary Display (2 defects: CARE-PBC-003, CARE-PBC-006)**
+Two distinct but related failures — incorrect copay tier values and non-compliant "not covered" wording. Both point to a gap in how the display layer handles edge states (deductible phase, drug-not-found). Neither scenario appears to have had a dedicated negative test case in the original suite.
+
+**Formulary Search (2 defects: CARE-PBC-001, CARE-PBC-008)**
+Input handling was clearly undertested — special character drug names and unconstrained input length both escaped the test suite. These are classic input boundary failures that should have been caught by negative testing.
+
+**Authentication (1 defect: CARE-PBC-004)** and **Formulary API (1 defect: CARE-PBC-005)** round out the batch, each with a single but high-impact defect.
+
+**Implication:** Data Display is the highest-risk component for Sprint 15. The concentration of 4 defects in one component with plan-type dependencies suggests that cross-plan display testing was either not systematically designed or not executed across all plan type combinations.
+
+---
+
+### 2. Plan Type Patterns — Batch Cache Plans Disproportionately Affected
+
+Batch-cache plans (HMO Classic, PPO Select, CHIP) are implicated in **6 of the 10 defects**:
+
+- **CARE-PBC-002** — HMO Classic and CHIP showing "Live data" label *(direct batch-cache failure)*
+- **CARE-PBC-003** — PPO Select and Standard Plan *(deductible-phase display)*
+- **CARE-PBC-007** — PPO Select and HMO Classic missing ACA disclaimer *(38% of member population)*
+- **CARE-PBC-009** — PPO Select + Standard Plan combination *(plan-switch)*
+- **CARE-PBC-010** — CHIP plan Unix epoch timestamp *(batch cache null state)*
+- **CARE-PBC-005** — All plan types under concurrent load
+
+**Implication:** The batch-cache data path was a known complexity flagged in the M3 requirements — the nightly cache, the timestamp requirement, and the plan-type detection logic all interact. The defect data confirms that this path received insufficient test coverage across its full state space. Specifically: the state where batch cache has NOT yet run (null state), the state where the wrong label is applied, and the state where plan-type switching invalidates cached data — all escaped the test suite.
+
+---
+
+### 3. Defect Type Patterns — Error Handling & Compliance Failures Dominate
+
+Three clear clusters emerge by failure type:
+
+**Error handling failures (3 defects: CARE-PBC-004, CARE-PBC-005, CARE-PBC-010)**
+All three involve the system failing to handle an abnormal state gracefully — session expiry shows a blank page, API timeout shows a blank page, and null timestamp renders as Unix epoch. The pattern is consistent: the happy path works, but error states produce either nothing or technically wrong data. This is a systemic gap in negative test coverage — specifically the "what does the system show when something goes wrong?" category.
+
+**Compliance/regulatory failures (3 defects: CARE-PBC-006, CARE-PBC-007, CARE-PBC-002)**
+Non-compliant "not covered" wording (CARE-PBC-006), missing ACA disclaimer for 38% of members (CARE-PBC-007), and a factually incorrect "Live data" label for batch-cache plans (CARE-PBC-002) — all three are compliance failures that carry regulatory or legal exposure. Sandra's prior audit concern was validated by the defect data.
+
+**Data integrity failures (2 defects: CARE-PBC-003, CARE-PBC-009)**
+Wrong tier copay values during deductible phase and stale plan data after plan-switch are both data integrity defects — the system renders data that is factually incorrect for the member's actual situation.
+
+**Input validation failures (2 defects: CARE-PBC-001, CARE-PBC-008)**
+Special character handling and unconstrained input length are standard input boundary failures. These should have been caught at unit or integration test level.
+
+---
+
+### 4. Severity Consistency Check — Mis-classifications
+
+**CARE-PBC-007 — Filed as Medium / P3 → Should be Critical / P1**
+This is the most significant mis-classification in the batch. The defect affects 38% of the member population (all PPO Select and HMO Classic members) and involves the absence of an ACA-mandated compliance disclaimer. This is not a "nice to have" display issue — it is a regulatory requirement with prior audit history at Carelon. A defect affecting 38% of members and carrying regulatory exposure cannot be Medium. This should be escalated to Critical / P1 immediately.
+
+**CARE-PBC-006 — Filed as High / P2 → Should be Critical / P1**
+The incorrect "drug not covered" wording for a drug that is simply not listed in the formulary implies a coverage decision has been made when it has not. This creates legal and clinical liability — a member could stop taking a necessary medication based on incorrect system messaging. The regulatory and member-harm risk is Critical, not High.
+
+**CARE-PBC-010 — Filed as Medium / P3 → Consider Escalating to High / P2**
+The Unix epoch timestamp (01 Jan 1970) displayed to CHIP members is not just a cosmetic bug — it directly undermines member trust in the data currency indicator that is an AC requirement. While formulary data accuracy is unaffected, the compliance requirement for an accurate timestamp is breached.
+
+**CARE-PBC-008 — Filed as Low / P4 → Keep**
+UI layout overflow with no functional impact on formulary data. Low is appropriate — this is a cosmetic and UX defect only.
+
+---
+
+### 5. Top 3 Test Coverage Gaps Implied by This Defect Batch
+
+**Gap 1 — Batch cache null/empty state testing (implies CARE-PBC-010, CARE-PBC-002)**
+No test case validated what the system displays when the batch cache has not yet run or returns a null timestamp. EC-04 in our edge case suite flagged this risk — it was not executed or was not in the original test suite at all.
+
+**Gap 2 — Compliance display testing across ALL plan types (implies CARE-PBC-007, CARE-PBC-002)**
+The ACA disclaimer test was designed but apparently only validated on Carelon Standard Plan. Batch-cache plan members (PPO Select, HMO Classic) were not covered in the compliance display test pass. A test matrix covering all plan type × compliance field combinations was absent.
+
+**Gap 3 — Error state and fallback UI testing (implies CARE-PBC-004, CARE-PBC-005, CARE-PBC-010)**
+Three separate defects produced blank pages or incorrect system state with no graceful fallback. Session expiry, API timeout, and null timestamp all needed dedicated negative test cases that either didn't exist or weren't executed. The absence of a "what does the system show when X fails?" test for each critical system dependency is the single largest gap in the test suite.
+
+---
+
+## Pattern Tracker — Did AI Find Each Pattern?
+
+| # | Pattern | AI Finding Summary | AI Found It? |
+|---|---------|-------------------|--------------|
+| **P1** | Data Display component clustering | 4 defects in Data Display component — wrong label, wrong tier, stale plan data, Unix epoch timestamp. Highest defect concentration. Points to undertested plan-type × display combinations | ✅ Yes |
+| **P2** | Batch cache plan types disproportionately affected | 6 of 10 defects implicate HMO Classic, PPO Select, or CHIP. Batch-cache data path undertested across its full state space — null state, wrong label, plan-switch invalidation | ✅ Yes |
+| **P3** | Absent error-state test coverage | 3 defects (CARE-PBC-004, 005, 010) all produce blank pages or wrong data in abnormal states. Systemic gap in negative test coverage for error handling and fallback UI | ✅ Yes |
+| **P4** | Member-facing messaging liability risk | CARE-PBC-006 "not covered" wording creates legal/clinical liability. CARE-PBC-007 missing ACA disclaimer carries regulatory exposure for 38% of members. Both are compliance failures | ✅ Yes |
+| **P5** | Severity mis-classification — which defect? | CARE-PBC-007 (Medium → Critical) and CARE-PBC-006 (High → Critical) are both under-classified. CARE-PBC-007 is the most egregious — regulatory exposure + 38% member population cannot be Medium | ✅ Yes |
+
+---
+
+## Prompt B Output — Coverage Gap Report
+
+---
+
+### Gap 1 — Batch Cache Null / Empty State Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | No test case validated the system's behavior when the nightly batch cache has not yet run or returns a null/empty timestamp value |
+| **Category** | Edge Case |
+| **Defect IDs** | CARE-PBC-010, CARE-PBC-002 |
+| **Recommended Test Case** | When the batch cache has not completed its first run, verify the system displays a safe fallback message (e.g., "Data temporarily unavailable") instead of a null timestamp or incorrect label |
+| **Priority** | 🔴 Critical |
+
+---
+
+### Gap 2 — ACA Disclaimer Not Validated Across All Plan Types
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | ACA disclaimer compliance test was executed only on Carelon Standard Plan — batch-cache plan members (PPO Select, HMO Classic, CHIP) were not included in the compliance display test pass |
+| **Category** | Compliance |
+| **Defect IDs** | CARE-PBC-007 |
+| **Recommended Test Case** | For each plan type (HMO Classic, PPO Select, CHIP, and all real-time plans), verify the ACA disclaimer appears on every results screen showing a copay/tier value — test must cover all plan types explicitly, not just Standard Plan |
+| **Priority** | 🔴 Critical |
+
+---
+
+### Gap 3 — Error State and Fallback UI Coverage Absent
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | No dedicated test cases for what the system displays when critical dependencies fail — session expiry mid-search, formulary API timeout, and null timestamp all produced blank pages or incorrect data with no graceful fallback |
+| **Category** | Negative |
+| **Defect IDs** | CARE-PBC-004, CARE-PBC-005, CARE-PBC-010 |
+| **Recommended Test Case** | For each critical system dependency (auth session, formulary API, batch cache), create a dedicated negative test case that simulates failure and verifies the system displays a user-friendly fallback message — never a blank page |
+| **Priority** | 🔴 Critical |
+
+---
+
+### Gap 4 — Non-Compliant "Not Found" Messaging Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | The test suite did not include a test that verified the exact wording of the drug-not-found message against the AC-approved text — only that some message appeared |
+| **Category** | Compliance |
+| **Defect IDs** | CARE-PBC-006 |
+| **Recommended Test Case** | When a drug is not found in the formulary, verify the system displays the exact AC-approved wording: "This medication is not listed in your current formulary. Please contact Member Services for coverage review." — any variation is a compliance defect |
+| **Priority** | 🔴 Critical |
+
+---
+
+### Gap 5 — Special Character Input Handling Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | Drug names containing hyphens, slashes, or parentheses (e.g., "ibuprofen-400") were not included in the input validation test set — only plain alphabetic names were tested |
+| **Category** | Negative |
+| **Defect IDs** | CARE-PBC-001 |
+| **Recommended Test Case** | Search for drug names containing hyphens, slashes, and parentheses that are confirmed in the formulary and verify results are returned correctly |
+| **Priority** | 🟠 High |
+
+---
+
+### Gap 6 — Plan-Switch Mid-Session Formulary Refresh Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | No test case covered the scenario where a member switches between plans mid-session — the formulary cache was not validated for invalidation on plan change |
+| **Category** | Edge Case |
+| **Defect IDs** | CARE-PBC-009 |
+| **Recommended Test Case** | For a member with access to multiple plans, switch plans mid-session and verify formulary results immediately reflect the newly selected plan without requiring a full page refresh |
+| **Priority** | 🟠 High |
+
+---
+
+### Gap 7 — Concurrent Load / API Capacity Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | No formal capacity or load test was run prior to release — the formulary API failure threshold under concurrent load was unknown |
+| **Category** | Negative |
+| **Defect IDs** | CARE-PBC-005 |
+| **Recommended Test Case** | Run a load test simulating 50+ concurrent formulary searches and verify the API either handles the load or degrades gracefully with a user-visible error message and retry option |
+| **Priority** | 🔴 Critical |
+
+---
+
+### Gap 8 — Input Length Validation Not Tested
+
+| Field | Detail |
+|-------|--------|
+| **Gap Description** | No upper bound was set or tested for the drug name search field — allowing 500+ character input that breaks the UI layout |
+| **Category** | Functional |
+| **Defect IDs** | CARE-PBC-008 |
+| **Recommended Test Case** | Verify the drug search field enforces a maximum input length (recommended 100 characters) and displays an appropriate validation message when exceeded |
+| **Priority** | 🟡 Medium |
+
+---
+
+### Summary Section
+
+| Question | Answer |
+|----------|--------|
+| **Which gap category is most underrepresented?** | **Compliance testing across plan types** — the test suite validated compliance requirements (ACA disclaimer, timestamp, wording) in isolation on Standard Plan but did not run a compliance test matrix across all plan types. 3 of the 10 defects are direct compliance failures that a plan-type × compliance field test matrix would have caught |
+| **Which single gap, if closed, would have prevented the most defects?** | **Gap 3 — Error state and fallback UI coverage** — closing this gap alone would have prevented CARE-PBC-004, CARE-PBC-005, and CARE-PBC-010 (3 defects). More importantly, it would have prevented the blank page experience that leaves members with no indication of what went wrong — the most member-harmful failure mode in the batch |
+| **One recommendation to prevent this pattern in future sprints** | Introduce a **"failure state test checklist"** as a mandatory sprint entry criterion — for every external dependency (API, batch cache, auth session) and every compliance display element (disclaimer, timestamp, wording), at least one negative/failure-state test case must exist before sprint testing begins. This makes error-state coverage a gate, not an afterthought |
+
+---
+
+# PHASE 2 — HUMAN PRIORITY RE-RANKING
+## Sr. QA Independent Assessment — Carelon Domain Knowledge
+
+---
+
+### Q1 — Which defect would you escalate above AI's highest priority?
+
+**Defect ID: CARE-PBC-007**
+
+**Reason:** CARE-PBC-005 (API timeout) is filed as Critical / P1 and AI correctly maintains it. However I would escalate **CARE-PBC-007** to sit *equal to or above* CARE-PBC-005 in release priority — not because the technical severity is higher, but because of **regulatory consequence**. CARE-PBC-005 is a performance defect — it causes a bad member experience but does not breach a legal requirement. CARE-PBC-007 is the absence of an ACA-mandated disclaimer on cost estimates shown to 38% of the member population. Carelon has prior audit findings on this exact issue (Sandra's email, M3 context). A repeat audit finding on the same compliance requirement — in a release that went live — is a qualitatively different kind of risk to the organisation than a performance ceiling defect. In a healthcare regulatory environment, the distinction between "bad experience" and "audit finding" is the difference between a sprint fix and a regulatory response. That context is not in Jira — it requires domain knowledge to weight correctly.
+
+---
+
+### Q2 — What did AI miss or underweight that domain knowledge flags?
+
+**What AI missed:**
+AI correctly identified CARE-PBC-007 as mis-classified but treated it as a severity labelling issue — a defect that should move from Medium to Critical on the same dimension as other defects. What AI did not flag is the **compounding risk** of CARE-PBC-007 + CARE-PBC-006 occurring in the same release.
+
+**Why domain knowledge catches it:**
+CARE-PBC-006 (wrong "not covered" wording) and CARE-PBC-007 (missing ACA disclaimer) are not two independent defects — they represent a compliance failure pattern where the system is simultaneously: (a) making an implied coverage decision it is not authorised to make, AND (b) failing to display the disclaimer that protects Carelon from member claims about cost accuracy. In a live release, these two defects together create a scenario where a member sees "This drug is not covered" (incorrect and legally inaccurate) with no ACA disclaimer (the safety net that covers Carelon from cost-related claims). The combined liability exposure of both defects live simultaneously is higher than the sum of either defect individually — and that is a clinical + regulatory + legal risk assessment that AI, operating purely on defect descriptions, cannot make.
+
+---
+
+## Severity Re-Triage — All 10 Defects
+
+| Jira ID | Filed Severity | Decision | One-Line Reason |
+|---------|---------------|----------|-----------------|
+| **CARE-PBC-001** | High / P2 | **Keep** | Special characters blocking valid drug searches is a functional failure affecting all plan types — High is appropriate |
+| **CARE-PBC-002** | High / P2 | **Escalate → Critical / P1** | "Live data" label on a batch-cache plan is factually incorrect and directly undermines the AC-required timestamp compliance — misleads members about data currency |
+| **CARE-PBC-003** | High / P2 | **Escalate → Critical / P1** | Wrong copay tier displayed during deductible phase causes direct financial harm to members — member pays incorrect amount at pharmacy; this is a data accuracy + member harm defect |
+| **CARE-PBC-004** | Medium / P3 | **Escalate → High / P2** | Blank page on session expiry with no redirect is both a security exposure (member may not realise session ended) and a broken authentication flow — Medium understates the auth failure risk |
+| **CARE-PBC-005** | Critical / P1 | **Keep** | API failure under 50+ concurrent searches with no error message and no retry logic is correctly Critical — but fix must include both the capacity issue AND the blank page fallback |
+| **CARE-PBC-006** | High / P2 | **Escalate → Critical / P1** | "Not covered" wording for a drug simply not listed in the formulary implies a clinical coverage decision — creates legal and member harm liability that exceeds High severity |
+| **CARE-PBC-007** | Medium / P3 ⚠️ | **Escalate → Critical / P1** | ACA disclaimer absent for 38% of member population on a regulated healthcare portal with prior audit findings — this cannot be Medium under any classification framework |
+| **CARE-PBC-008** | Low / P4 | **Keep** | UI layout overflow with zero impact on formulary data or compliance — Low is correct; input validation improvement is a sprint hygiene item |
+| **CARE-PBC-009** | High / P2 | **Keep** | Plan-switch showing stale formulary data is a data integrity defect — member could act on wrong plan's coverage information; High is appropriate |
+| **CARE-PBC-010** | Medium / P3 | **Escalate → High / P2** | Unix epoch timestamp (01 Jan 1970) breaches the AC requirement for an accurate last-updated display and destroys member trust in the data currency indicator — Medium understates the compliance breach |
+
+---
+
+### Re-Triage Summary
+
+| Decision | Count | Defect IDs |
+|----------|-------|------------|
+| 🔴 **Escalate to Critical / P1** | 4 | CARE-PBC-002, CARE-PBC-003, CARE-PBC-006, CARE-PBC-007 |
+| 🟠 **Escalate to High / P2** | 2 | CARE-PBC-004, CARE-PBC-010 |
+| ✅ **Keep as filed** | 4 | CARE-PBC-001, CARE-PBC-005, CARE-PBC-008, CARE-PBC-009 |
+| 🟢 **Downgrade** | 0 | — |
+
+---
+
+> 💡 **Sr. QA Final Call:** The most dangerous release state is **CARE-PBC-006 + CARE-PBC-007 live simultaneously** — one makes an unauthorised coverage decision in the UI, the other removes the compliance disclaimer that would have protected Carelon. Both must be treated as release blockers regardless of what P-level they were filed at. These two defects together represent the highest combined regulatory and legal exposure in this batch — and that assessment requires Carelon healthcare domain knowledge that no automated triage tool can provide.
